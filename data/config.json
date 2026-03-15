@@ -1,0 +1,17 @@
+{
+  "db_type": "sqlite",
+  "mysql": {
+    "host": "localhost",
+    "port": 3306,
+    "user": "root",
+    "password": "",
+    "database": "mcmanager"
+  },
+  "web": {
+    "host": "0.0.0.0",
+    "port": 8080
+  },
+  "secret_key": "30c123112a139def35acbf25ad935b8174d7cca29aa1145da6fdc8a9e4dc9823",
+  "default_java_memory": "2G",
+  "max_java_memory": "4G"
+}

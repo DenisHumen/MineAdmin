@@ -1,0 +1,18 @@
+services:
+  mineadmin:
+    build: .
+    container_name: mineadmin
+    ports:
+      - "8080:8080"
+      - "25565-25575:25565-25575"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
