@@ -1,0 +1,112 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: MineAdmin-linux
+            asset_name: MineAdmin-linux
+          - os: windows-latest
+            artifact_name: MineAdmin-windows
+            asset_name: MineAdmin-windows.exe
+          - os: macos-latest
+            artifact_name: MineAdmin-macos
+            asset_name: MineAdmin-macos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "VERSION=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_OUTPUT
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          pyinstaller \
+            --onefile \
+            --name ${{ matrix.artifact_name }} \
+            --add-data "app/static:app/static" \
+            --add-data "app/templates:app/templates" \
+            --add-data "VERSION:." \
+            main.py
+
+      - name: Build with PyInstaller (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pyinstaller `
+            --onefile `
+            --name ${{ matrix.artifact_name }} `
+            --add-data "app/static;app/static" `
+            --add-data "app/templates;app/templates" `
+            --add-data "VERSION;." `
+            main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.artifact_name }}*
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: echo "VERSION=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: List artifacts
+        run: find dist/ -type f
+
+      - name: Delete existing release if exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "v${{ steps.version.outputs.VERSION }}" --yes 2>/dev/null || true
+          git push --delete origin "v${{ steps.version.outputs.VERSION }}" 2>/dev/null || true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.version.outputs.VERSION }}" \
+            --title "MineAdmin v${{ steps.version.outputs.VERSION }}" \
+            --notes "Release v${{ steps.version.outputs.VERSION }}" \
+            dist/MineAdmin-linux/MineAdmin-linux \
+            dist/MineAdmin-windows/MineAdmin-windows.exe \
+            dist/MineAdmin-macos/MineAdmin-macos
