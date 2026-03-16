@@ -46,6 +46,7 @@ def create_app() -> FastAPI:
     from app.routes.terminal import router as terminal_router
     from app.routes.config_routes import router as config_router
     from app.routes.monitoring import router as monitoring_router
+    from app.routes.backup import router as backup_router
 
     app.include_router(auth_router)
     app.include_router(servers_router)
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(terminal_router)
     app.include_router(config_router)
     app.include_router(monitoring_router)
+    app.include_router(backup_router)
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))

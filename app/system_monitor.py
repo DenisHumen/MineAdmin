@@ -2,6 +2,29 @@ import psutil
 import platform
 import os
 from typing import Optional
+from pathlib import Path
+
+
+def _get_cpu_model() -> str:
+    name = platform.processor()
+    if name:
+        return name
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            for line in f:
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except (OSError, IndexError):
+        pass
+    try:
+        import subprocess
+        r = subprocess.run(["lscpu"], capture_output=True, text=True, timeout=5)
+        for line in r.stdout.splitlines():
+            if "Model name" in line or "Имя модели" in line:
+                return line.split(":", 1)[1].strip()
+    except Exception:
+        pass
+    return platform.machine()
 
 
 def get_system_info() -> dict:
@@ -11,7 +34,7 @@ def get_system_info() -> dict:
         "platform": platform.system(),
         "platform_version": platform.version(),
         "architecture": platform.machine(),
-        "processor": platform.processor(),
+        "processor": _get_cpu_model(),
         "hostname": platform.node(),
         "python_version": platform.python_version(),
         "cpu_count": psutil.cpu_count(),
@@ -21,6 +44,43 @@ def get_system_info() -> dict:
     }
 
 
+def get_all_disks(servers_path: str = None) -> list[dict]:
+    disks = []
+    if servers_path is None:
+        from app.config import SERVERS_DIR
+        servers_path = str(SERVERS_DIR)
+
+    for part in psutil.disk_partitions(all=False):
+        try:
+            usage = psutil.disk_usage(part.mountpoint)
+        except (PermissionError, OSError):
+            continue
+        is_main = False
+        try:
+            is_main = os.path.commonpath([os.path.realpath(servers_path), os.path.realpath(part.mountpoint)]) == os.path.realpath(part.mountpoint)
+        except ValueError:
+            pass
+        disks.append({
+            "device": part.device,
+            "mountpoint": part.mountpoint,
+            "fstype": part.fstype,
+            "total": usage.total,
+            "used": usage.used,
+            "free": usage.free,
+            "percent": usage.percent,
+            "is_main": is_main,
+        })
+
+    main_disks = [d for d in disks if d["is_main"]]
+    if len(main_disks) > 1:
+        best = max(main_disks, key=lambda d: len(d["mountpoint"]))
+        for d in disks:
+            d["is_main"] = (d["mountpoint"] == best["mountpoint"])
+
+    disks.sort(key=lambda d: (not d["is_main"], d["mountpoint"]))
+    return disks
+
+
 def get_system_stats() -> dict:
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
@@ -28,6 +88,23 @@ def get_system_stats() -> dict:
     cpu_per_core = psutil.cpu_percent(interval=0, percpu=True)
 
     net = psutil.net_io_counters()
+
+    all_disks = get_all_disks()
+    main_disk = next((d for d in all_disks if d["is_main"]), None)
+    if main_disk:
+        disk_data = {
+            "total": main_disk["total"],
+            "used": main_disk["used"],
+            "free": main_disk["free"],
+            "percent": main_disk["percent"],
+        }
+    else:
+        disk_data = {
+            "total": disk.total,
+            "used": disk.used,
+            "free": disk.free,
+            "percent": disk.percent,
+        }
 
     return {
         "cpu": {
@@ -41,12 +118,8 @@ def get_system_stats() -> dict:
             "used": mem.used,
             "percent": mem.percent,
         },
-        "disk": {
-            "total": disk.total,
-            "used": disk.used,
-            "free": disk.free,
-            "percent": disk.percent,
-        },
+        "disk": disk_data,
+        "disks": all_disks,
         "network": {
             "bytes_sent": net.bytes_sent,
             "bytes_recv": net.bytes_recv,

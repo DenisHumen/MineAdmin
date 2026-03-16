@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
 
-from app.config import SERVERS_DIR
+from app.config import SERVERS_DIR, get_servers_dir
 from app.java_manager import find_suitable_java, check_java_available, get_required_java_version
 
 logger = logging.getLogger("mineadmin.server")
@@ -21,7 +21,7 @@ _ws_subscribers: dict[int, list[asyncio.Queue]] = {}
 
 def get_server_dir(server_id: int, name: str) -> Path:
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
-    return SERVERS_DIR / f"{server_id}_{safe_name}"
+    return get_servers_dir() / f"{server_id}_{safe_name}"
 
 
 def accept_eula(server_dir: Path):

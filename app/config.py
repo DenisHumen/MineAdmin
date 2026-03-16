@@ -25,6 +25,24 @@ DEFAULT_CONFIG = {
     "secret_key": secrets.token_hex(32),
     "default_java_memory": "2G",
     "max_java_memory": "4G",
+    "servers_dir": str(SERVERS_DIR),
+    "backup": {
+        "path": str(DATA_DIR / "backups"),
+        "sftp": {
+            "enabled": False,
+            "host": "",
+            "port": 22,
+            "username": "",
+            "password": "",
+            "key_path": "",
+            "remote_path": "/backups",
+        },
+        "schedule": {
+            "enabled": False,
+            "interval_hours": 24,
+            "max_backups": 10,
+        },
+    },
     "ssh": {
         "enabled": False,
         "host": "localhost",
@@ -40,6 +58,23 @@ DEFAULT_CONFIG = {
 def ensure_dirs():
     for d in [DATA_DIR, SERVERS_DIR, DB_DIR]:
         d.mkdir(parents=True, exist_ok=True)
+
+
+def get_servers_dir() -> Path:
+    cfg = load_config()
+    custom = cfg.get("servers_dir")
+    if custom:
+        p = Path(custom)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    return SERVERS_DIR
+
+
+def get_backup_dir() -> Path:
+    cfg = load_config()
+    p = Path(cfg.get("backup", {}).get("path", str(DATA_DIR / "backups")))
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 def load_config() -> dict:

@@ -29,6 +29,10 @@ async def system_stats(user: dict = Depends(get_current_user)):
     stats["disk"]["total_formatted"] = format_bytes(stats["disk"]["total"])
     stats["disk"]["used_formatted"] = format_bytes(stats["disk"]["used"])
     stats["disk"]["free_formatted"] = format_bytes(stats["disk"]["free"])
+    for d in stats.get("disks", []):
+        d["total_formatted"] = format_bytes(d["total"])
+        d["used_formatted"] = format_bytes(d["used"])
+        d["free_formatted"] = format_bytes(d["free"])
     return stats
 
 

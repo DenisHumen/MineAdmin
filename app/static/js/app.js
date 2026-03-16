@@ -153,8 +153,8 @@ const App = {
         <div class="main-layout">
             <aside class="sidebar">
                 <div class="sidebar-header">
-                    <div class="sidebar-logo">MineAdmin</div>
-                    <div class="sidebar-version">v1.0.0</div>
+                    <div class="sidebar-logo" style="display:flex;align-items:center;gap:10px"><img src="/static/logo.png" alt="Logo" style="width:32px;height:32px;border-radius:6px;object-fit:cover">MineAdmin</div>
+                    <div class="sidebar-version" id="sidebar-version">v...</div>
                 </div>
                 <nav class="sidebar-nav">
                     <div class="nav-section">
@@ -206,6 +206,11 @@ const App = {
             const payload = JSON.parse(atob(API.token.split('.')[1]));
             document.getElementById('sidebar-user').textContent = payload.username;
         } catch(e) {}
+
+        API.get('/api/config/version').then(r => {
+            const el = document.getElementById('sidebar-version');
+            if (el && r.version) el.textContent = 'v' + r.version;
+        }).catch(() => {});
 
         this.navigate('dashboard');
         this.startStatsPolling();
@@ -284,10 +289,11 @@ const Pages = {
                         <div class="stat-value ${stats.memory.percent > 80 ? 'red' : stats.memory.percent > 50 ? 'yellow' : 'green'}" id="dash-ram">${stats.memory.percent}%</div>
                         <div class="stat-sub">${stats.memory.used_formatted.human} / ${stats.memory.total_formatted.human}</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Диск</div>
+                    <div class="stat-card" style="cursor:pointer" onclick="App.navigate('monitoring')" title="Подробнее о дисках">
+                        <div class="stat-label">Диск (основной)</div>
                         <div class="stat-value ${stats.disk.percent > 80 ? 'red' : 'green'}" id="dash-disk">${stats.disk.percent}%</div>
                         <div class="stat-sub">${stats.disk.free_formatted.human} свободно</div>
+                        ${(stats.disks || []).length > 1 ? `<div class="stat-sub" style="color:var(--text-muted);font-size:11px;margin-top:2px">+${stats.disks.length - 1} дисков</div>` : ''}
                     </div>
                 </div>
                 <div style="margin-top:16px">
@@ -297,7 +303,7 @@ const Pages = {
                         </div>
                         <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:14px">
                             <div><span style="color:var(--text-muted)">Локальный IP:</span> <strong>${netInfo.local_ip}</strong></div>
-                            <div><span style="color:var(--text-muted)">Публичный IP:</span> <strong>${netInfo.public_ip || 'Не определён'}</strong></div>
+                            <div><span style="color:var(--text-muted)">Публичный IP:</span> <strong class="public-ip-hidden" style="cursor:pointer;color:var(--primary);text-decoration:underline" onclick="PublicIP.requestReveal(this, '${netInfo.public_ip || ''}')">${netInfo.public_ip ? '••••••••••' : 'Не определён'}</strong></div>
                         </div>
                     </div>
                 </div>
@@ -552,7 +558,7 @@ const Pages = {
                         <div class="stat-sub">${stats.memory.used_formatted.human} / ${stats.memory.total_formatted.human}</div>
                         <div class="progress-bar" style="margin-top:8px"><div class="progress-fill" style="width:${stats.memory.percent}%"></div></div>
                     </div>
-                    <div class="stat-card"><div class="stat-label">Диск</div>
+                    <div class="stat-card"><div class="stat-label">Диск (основной)</div>
                         <div class="stat-value">${stats.disk.percent}%</div>
                         <div class="stat-sub">${stats.disk.used_formatted.human} / ${stats.disk.total_formatted.human}</div>
                         <div class="progress-bar" style="margin-top:8px"><div class="progress-fill" style="width:${stats.disk.percent}%"></div></div>
@@ -576,6 +582,34 @@ const Pages = {
                         `).join('')}
                     </div>
                 </div>
+                ${(stats.disks && stats.disks.length > 0) ? `
+                <div class="card" style="margin-top:16px">
+                    <div class="card-header"><h3 class="card-title">Все диски</h3></div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Устройство</th><th>Точка монтирования</th><th>ФС</th><th>Размер</th><th>Использовано</th><th>Свободно</th><th>%</th><th></th></tr></thead>
+                            <tbody>
+                                ${stats.disks.map(d => `
+                                    <tr style="${d.is_main ? 'background:rgba(var(--primary-rgb,99,102,241),0.1);font-weight:500' : ''}">
+                                        <td>${d.device}</td>
+                                        <td style="font-family:'JetBrains Mono';font-size:12px">${d.mountpoint}</td>
+                                        <td>${d.fstype}</td>
+                                        <td>${d.total_formatted.human}</td>
+                                        <td>${d.used_formatted.human}</td>
+                                        <td>${d.free_formatted.human}</td>
+                                        <td>
+                                            <div style="display:flex;align-items:center;gap:8px">
+                                                <div class="progress-bar" style="width:80px;height:6px"><div class="progress-fill" style="width:${d.percent}%"></div></div>
+                                                <span class="${d.percent > 80 ? 'red' : ''}">${d.percent}%</span>
+                                            </div>
+                                        </td>
+                                        <td>${d.is_main ? '<span class="badge badge-blue" style="font-size:10px">Серверы</span>' : ''}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>` : ''}
                 <div class="card" style="margin-top:16px">
                     <div class="card-header"><h3 class="card-title">Информация о системе</h3></div>
                     <div class="grid grid-2">
@@ -625,6 +659,7 @@ const Pages = {
                     <div class="tab active" onclick="Pages.settingsTab('general',this)">Основные</div>
                     <div class="tab" onclick="Pages.settingsTab('database',this)">База данных</div>
                     <div class="tab" onclick="Pages.settingsTab('java',this)">Java</div>
+                    <div class="tab" onclick="Pages.settingsTab('backup',this)">Бекапы</div>
                     <div class="tab" onclick="Pages.settingsTab('ssh',this)">SSH / Терминал</div>
                 </div>
                 <div id="settings-content">
@@ -636,6 +671,11 @@ const Pages = {
                         <div class="form-group">
                             <label class="form-label">Web порт</label>
                             <input type="number" class="form-input" id="cfg-port" value="${config.web?.port || 8080}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Путь хранения серверов</label>
+                            <input type="text" class="form-input" id="cfg-servers-dir" value="${config.servers_dir || ''}" placeholder="По умолчанию: data/servers">
+                            <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Каталог для хранения файлов серверов. Изменение вступит в силу для новых серверов.</div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">RAM по умолчанию (мин)</label>
@@ -658,6 +698,7 @@ const Pages = {
         if (tab === 'general') Pages.settings();
         else if (tab === 'database') Pages.settingsDatabase();
         else if (tab === 'java') Pages.settingsJava();
+        else if (tab === 'backup') Pages.settingsBackup();
         else if (tab === 'ssh') Pages.settingsSSH();
     },
 
@@ -758,6 +799,7 @@ const Pages = {
                     host: document.getElementById('cfg-host').value,
                     port: parseInt(document.getElementById('cfg-port').value),
                 },
+                servers_dir: document.getElementById('cfg-servers-dir').value,
                 default_java_memory: document.getElementById('cfg-defmem').value,
                 max_java_memory: document.getElementById('cfg-maxmem').value,
             });
@@ -855,6 +897,48 @@ brew install openjdk@21
 # Windows
 winget install EclipseAdoptium.Temurin.21.JRE</code></pre>
             `},
+            { id: 'backups', title: 'Бекапы', content: `
+                <h2>Бекапы</h2>
+                <p>MineAdmin поддерживает создание полных бекапов серверов — вручную и по расписанию, с возможностью выгрузки через SFTP.</p>
+                <h3>Быстрый бекап</h3>
+                <ol>
+                    <li>Откройте карточку сервера</li>
+                    <li>Нажмите кнопку <strong>Бекап</strong></li>
+                    <li>Укажите путь для сохранения (или оставьте по умолчанию)</li>
+                    <li>Нажмите <strong>Начать бекап</strong></li>
+                </ol>
+                <p>Бекап создаётся в формате ZIP-архива, содержащего все файлы сервера (мир, конфиги, плагины и т.д.).</p>
+                <h3>Выгрузка через SFTP</h3>
+                <p>При включении SFTP происходит следующий процесс:</p>
+                <ol>
+                    <li>Сервер <strong>автоматически останавливается</strong> командой <code>stop</code> (корректная остановка с сохранением мира)</li>
+                    <li>Создаётся ZIP-архив всех файлов сервера</li>
+                    <li>Архив выгружается на удалённый сервер по SFTP</li>
+                    <li>Сервер <strong>автоматически запускается</strong> обратно</li>
+                </ol>
+                <p>Настройки SFTP (хост, порт, логин, пароль/ключ, удалённый путь) можно задать в <strong>Настройки → Бекапы</strong> или при создании каждого бекапа индивидуально.</p>
+                <h3>Расписание автобекапов</h3>
+                <p>В разделе <strong>Настройки → Бекапы</strong> можно включить автоматические бекапы:</p>
+                <ul>
+                    <li><strong>Интервал</strong> — как часто создавать бекапы (в часах, по умолчанию 24)</li>
+                    <li><strong>Макс. бекапов</strong> — сколько хранить на сервер (старые удаляются автоматически)</li>
+                </ul>
+                <h3>Управление бекапами</h3>
+                <ul>
+                    <li>Все бекапы отображаются в <strong>Настройки → Бекапы</strong></li>
+                    <li>Можно <strong>скачать</strong> любой бекап через браузер</li>
+                    <li>Можно <strong>удалить</strong> ненужные бекапы</li>
+                    <li>Путь хранения бекапов настраивается (по умолчанию <code>data/backups</code>)</li>
+                </ul>
+                <h3>Восстановление из бекапа</h3>
+                <p>Для восстановления:</p>
+                <ol>
+                    <li>Остановите сервер</li>
+                    <li>Скачайте нужный бекап</li>
+                    <li>Распакуйте ZIP-архив в директорию сервера, заменив файлы</li>
+                    <li>Запустите сервер</li>
+                </ol>
+            `},
             { id: 'docker', title: 'Docker', content: `
                 <h2>Docker</h2>
                 <h3>Быстрый запуск</h3>
@@ -945,6 +1029,7 @@ const ServerCard = {
                 <button class="btn btn-ghost btn-sm" onclick="ServerActions.openFiles(${server.id})">Файлы</button>
                 <button class="btn btn-ghost btn-sm" onclick="ServerActions.openProperties(${server.id})">Настройки</button>
                 <button class="btn btn-ghost btn-sm" onclick="ServerActions.checkNetwork(${server.id})">Сеть</button>
+                <button class="btn btn-ghost btn-sm" onclick="ServerActions.backupServer(${server.id})">Бекап</button>
                 <button class="btn btn-ghost btn-sm" onclick="ServerActions.editServer(${server.id})">Изменить</button>
                 <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="ServerActions.deleteServer(${server.id})">Удалить</button>
             </div>
@@ -1028,7 +1113,7 @@ const ServerActions = {
             Modal.show(`Сеть — ${server.name}`, `
                 <div class="grid grid-2" style="gap:12px">
                     <div class="stat-card"><div class="stat-label">Локальный IP</div><div class="stat-value" style="font-size:18px">${result.local_ip}</div></div>
-                    <div class="stat-card"><div class="stat-label">Публичный IP</div><div class="stat-value" style="font-size:18px">${result.public_ip || 'Не определён'}</div></div>
+                    <div class="stat-card"><div class="stat-label">Публичный IP</div><div class="stat-value public-ip-hidden" style="font-size:18px;cursor:pointer;color:var(--primary);text-decoration:underline" onclick="PublicIP.requestReveal(this, '${result.public_ip || ''}')">${result.public_ip ? '••••••••••' : 'Не определён'}</div></div>
                     <div class="stat-card"><div class="stat-label">Порт</div><div class="stat-value" style="font-size:18px">${result.port}</div></div>
                     <div class="stat-card"><div class="stat-label">Локальный доступ</div><div class="stat-value ${result.local_accessible ? 'green' : 'red'}" style="font-size:18px">${result.local_accessible ? 'Доступен' : 'Недоступен'}</div>
                         ${result.local_latency_ms ? `<div class="stat-sub">${result.local_latency_ms}ms</div>` : ''}
@@ -1039,10 +1124,78 @@ const ServerActions = {
                 </div>
                 <div style="margin-top:16px;font-size:13px;color:var(--text-secondary)">
                     <p>Адрес для подключения из локальной сети: <strong>${result.local_ip}:${result.port}</strong></p>
-                    ${result.public_ip ? `<p>Адрес для подключения из интернета: <strong>${result.public_ip}:${result.port}</strong></p>` : ''}
+                    ${result.public_ip ? `<p>Адрес для подключения из интернета: <strong class="public-ip-hidden" style="cursor:pointer;color:var(--primary);text-decoration:underline" onclick="PublicIP.requestReveal(this, '${result.public_ip}:${result.port}')">••••••••••</strong></p>` : ''}
                 </div>
             `);
         } catch(e) { Toast.error(e.message); }
+    },
+
+    async backupServer(id) {
+        const server = App.servers.find(s => s.id === id);
+        if (!server) return;
+        let cfg = {};
+        try { cfg = (await API.get('/api/config')).config; } catch(e) {}
+        const backupCfg = cfg.backup || {};
+        const sftpCfg = backupCfg.sftp || {};
+
+        Modal.show(`Бекап — ${server.name}`, `
+            <div class="form-group">
+                <label class="form-label">Путь для сохранения бекапа</label>
+                <input type="text" class="form-input" id="backup-path" value="${backupCfg.path || ''}" placeholder="/путь/к/бекапам">
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+                <label class="form-label" style="margin:0">Выгрузить через SFTP</label>
+                <label class="toggle">
+                    <input type="checkbox" id="backup-sftp-enable" ${sftpCfg.enabled ? 'checked' : ''} onchange="document.getElementById('backup-sftp-fields').style.display=this.checked?'block':'none'">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div id="backup-sftp-fields" style="display:${sftpCfg.enabled ? 'block' : 'none'}">
+                <div class="notification-banner warning" style="margin-bottom:12px">
+                    <span>!</span>
+                    <div>При SFTP-бекапе сервер будет остановлен командой <code>stop</code>, после бекапа запустится автоматически.</div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">SFTP хост</label><input type="text" class="form-input" id="backup-sftp-host" value="${sftpCfg.host || ''}"></div>
+                    <div class="form-group"><label class="form-label">Порт</label><input type="number" class="form-input" id="backup-sftp-port" value="${sftpCfg.port || 22}"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Пользователь</label><input type="text" class="form-input" id="backup-sftp-user" value="${sftpCfg.username || ''}"></div>
+                    <div class="form-group"><label class="form-label">Пароль</label><input type="password" class="form-input" id="backup-sftp-pass" value="" placeholder="${sftpCfg.password ? 'Сохранён' : ''}"></div>
+                </div>
+                <div class="form-group"><label class="form-label">Путь SSH ключа</label><input type="text" class="form-input" id="backup-sftp-key" value="${sftpCfg.key_path || ''}" placeholder="/home/user/.ssh/id_rsa"></div>
+                <div class="form-group"><label class="form-label">Удалённый путь</label><input type="text" class="form-input" id="backup-sftp-remote" value="${sftpCfg.remote_path || '/backups'}"></div>
+            </div>
+            <div id="backup-progress-area" style="display:none;margin-top:16px">
+                <div class="progress-bar"><div class="progress-fill" id="backup-fill" style="width:0%"></div></div>
+                <div class="progress-info"><span id="backup-status">Подготовка...</span><span class="progress-percent" id="backup-percent">0%</span></div>
+            </div>
+        `, async () => {
+            const useSftp = document.getElementById('backup-sftp-enable').checked;
+            const body = {
+                backup_path: document.getElementById('backup-path').value,
+                use_sftp: useSftp,
+            };
+            if (useSftp) {
+                body.sftp = {
+                    host: document.getElementById('backup-sftp-host').value,
+                    port: parseInt(document.getElementById('backup-sftp-port').value),
+                    username: document.getElementById('backup-sftp-user').value,
+                    password: document.getElementById('backup-sftp-pass').value || undefined,
+                    key_path: document.getElementById('backup-sftp-key').value || undefined,
+                    remote_path: document.getElementById('backup-sftp-remote').value,
+                };
+            }
+            const { task_id } = await API.post('/api/backups/' + id, body);
+            document.getElementById('backup-progress-area').style.display = 'block';
+            document.getElementById('modal-save').disabled = true;
+            document.getElementById('modal-save').textContent = 'Выполняется...';
+            BackupManager.pollProgress(task_id);
+            throw new Error('__suppress_close__');
+        }, '640px');
+
+        const saveBtn = document.getElementById('modal-save');
+        if (saveBtn) saveBtn.textContent = 'Начать бекап';
     },
 
     async editServer(id) {
@@ -1106,13 +1259,114 @@ const Modal = {
 
         if (onSave) {
             document.getElementById('modal-save').addEventListener('click', async () => {
-                try { await onSave(); Modal.close(); } catch(e) { Toast.error(e.message); }
+                try { await onSave(); Modal.close(); } catch(e) { if (e.message !== '__suppress_close__') Toast.error(e.message); }
             });
         }
     },
     close() {
         Terminal.disconnect();
         document.querySelector('.modal-overlay')?.remove();
+    }
+};
+
+const PublicIP = {
+    requestReveal(el, ip) {
+        if (!ip) return;
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center';
+        overlay.innerHTML = `
+            <div style="background:var(--bg-primary,#1a1a2e);border:1px solid var(--border,#333);border-radius:12px;padding:32px;max-width:420px;width:90%;text-align:center;color:var(--text-primary,#fff)">
+                <div style="font-size:24px;margin-bottom:12px">⚠️</div>
+                <h3 style="margin:0 0 12px;font-size:18px">Показать публичный IP?</h3>
+                <p style="margin:0 0 24px;font-size:14px;color:var(--text-secondary,#aaa)">Публичный IP-адрес является конфиденциальной информацией. Убедитесь, что рядом нет посторонних.</p>
+                <div style="display:flex;gap:12px;justify-content:center">
+                    <button class="btn btn-ghost" id="pip-cancel">Отмена</button>
+                    <button class="btn btn-primary" id="pip-confirm">Да, показать</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+        overlay.querySelector('#pip-cancel').addEventListener('click', () => overlay.remove());
+        overlay.querySelector('#pip-confirm').addEventListener('click', () => {
+            el.textContent = ip;
+            el.style.cursor = 'default';
+            el.style.textDecoration = 'none';
+            el.style.color = '';
+            el.onclick = null;
+            el.classList.remove('public-ip-hidden');
+            overlay.remove();
+        });
+    }
+};
+
+const BackupManager = {
+    async pollProgress(taskId) {
+        try {
+            const p = await API.get(`/api/backups/progress/${taskId}`);
+            const fill = document.getElementById('backup-fill');
+            const status = document.getElementById('backup-status');
+            const percent = document.getElementById('backup-percent');
+
+            if (fill) fill.style.width = p.percent + '%';
+            if (percent) percent.textContent = p.percent + '%';
+            if (status) status.textContent = p.message || p.status;
+
+            if (p.status === 'completed') {
+                if (fill) { fill.style.width = '100%'; fill.classList.add('done'); }
+                Toast.success('Бекап завершён!');
+                const btn = document.getElementById('modal-save');
+                if (btn) { btn.textContent = 'Готово'; btn.disabled = false; btn.onclick = () => Modal.close(); }
+            } else if (p.status === 'error') {
+                Toast.error(p.message || 'Ошибка бекапа');
+                const btn = document.getElementById('modal-save');
+                if (btn) { btn.textContent = 'Закрыть'; btn.disabled = false; btn.onclick = () => Modal.close(); }
+            } else {
+                setTimeout(() => this.pollProgress(taskId), 1000);
+            }
+        } catch(e) {
+            setTimeout(() => this.pollProgress(taskId), 2000);
+        }
+    },
+
+    async showBackupList(serverId = null) {
+        try {
+            const url = serverId ? `/api/backups?server_id=${serverId}` : '/api/backups';
+            const { backups } = await API.get(url);
+            if (backups.length === 0) {
+                Toast.info('Бекапов не найдено');
+                return;
+            }
+            const rows = backups.map(b => {
+                const size = b.size > 1048576 ? (b.size / 1048576).toFixed(1) + ' MB' : (b.size / 1024).toFixed(0) + ' KB';
+                const date = new Date(b.created).toLocaleString();
+                return `<tr>
+                    <td style="font-size:12px">${b.filename}</td>
+                    <td>${size}</td>
+                    <td>${date}</td>
+                    <td>
+                        <a href="/api/backups/download/${b.filename}" class="btn btn-ghost btn-sm" style="font-size:11px">Скачать</a>
+                        <button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red)" onclick="BackupManager.deleteBackup('${b.filename}')">Удалить</button>
+                    </td>
+                </tr>`;
+            }).join('');
+            Modal.show('Список бекапов', `
+                <div class="table-container" style="max-height:60vh;overflow-y:auto">
+                    <table>
+                        <thead><tr><th>Файл</th><th>Размер</th><th>Дата</th><th></th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `, null, '750px');
+        } catch(e) { Toast.error(e.message); }
+    },
+
+    async deleteBackup(filename) {
+        if (!confirm('Удалить этот бекап?')) return;
+        try {
+            await API.del(`/api/backups/${filename}`);
+            Toast.success('Бекап удалён');
+            Modal.close();
+        } catch(e) { Toast.error(e.message); }
     }
 };
 
@@ -1516,6 +1770,129 @@ Pages.testSSH = async function() {
     } catch(e) {
         el.innerHTML = `<div class="notification-banner error">${e.message}</div>`;
     }
+};
+
+Pages.settingsBackup = async function() {
+    try {
+        const { config } = await API.get('/api/config');
+        const backup = config.backup || {};
+        const sftp = backup.sftp || {};
+        const schedule = backup.schedule || {};
+        const { backups } = await API.get('/api/backups');
+
+        document.getElementById('settings-content').innerHTML = `
+        <div class="card fade-in">
+            <div class="card-header"><h3 class="card-title">Настройки бекапов</h3></div>
+            <div class="form-group">
+                <label class="form-label">Путь для бекапов</label>
+                <input type="text" class="form-input" id="bk-path" value="${backup.path || ''}" placeholder="data/backups">
+            </div>
+            <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px">
+                <h4 style="margin-bottom:12px">Расписание автобекапов</h4>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                    <label class="form-label" style="margin:0">Включить</label>
+                    <label class="toggle">
+                        <input type="checkbox" id="bk-sched-on" ${schedule.enabled ? 'checked' : ''}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Интервал (часы)</label>
+                        <input type="number" class="form-input" id="bk-sched-hours" value="${schedule.interval_hours || 24}" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Макс. бекапов на сервер</label>
+                        <input type="number" class="form-input" id="bk-sched-max" value="${schedule.max_backups || 10}" min="1">
+                    </div>
+                </div>
+            </div>
+            <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px">
+                <h4 style="margin-bottom:12px">SFTP по умолчанию</h4>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                    <label class="form-label" style="margin:0">SFTP выгрузка</label>
+                    <label class="toggle">
+                        <input type="checkbox" id="bk-sftp-on" ${sftp.enabled ? 'checked' : ''} onchange="document.getElementById('bk-sftp-fields').style.display=this.checked?'block':'none'">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div id="bk-sftp-fields" style="display:${sftp.enabled ? 'block' : 'none'}">
+                    <div class="notification-banner warning" style="margin-bottom:12px">
+                        <span>!</span>
+                        <div>При SFTP-бекапе сервер автоматически остановится (команда <code>stop</code>), после выгрузки запустится заново.</div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Хост</label><input type="text" class="form-input" id="bk-sftp-host" value="${sftp.host || ''}"></div>
+                        <div class="form-group"><label class="form-label">Порт</label><input type="number" class="form-input" id="bk-sftp-port" value="${sftp.port || 22}"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Пользователь</label><input type="text" class="form-input" id="bk-sftp-user" value="${sftp.username || ''}"></div>
+                        <div class="form-group"><label class="form-label">Пароль</label><input type="password" class="form-input" id="bk-sftp-pass" value="" placeholder="${sftp.password ? 'Сохранён' : ''}"></div>
+                    </div>
+                    <div class="form-group"><label class="form-label">Путь SSH ключа</label><input type="text" class="form-input" id="bk-sftp-key" value="${sftp.key_path || ''}" placeholder="/home/user/.ssh/id_rsa"></div>
+                    <div class="form-group"><label class="form-label">Удалённый путь</label><input type="text" class="form-input" id="bk-sftp-remote" value="${sftp.remote_path || '/backups'}"></div>
+                </div>
+            </div>
+            <div style="margin-top:16px">
+                <button class="btn btn-primary" onclick="Pages.saveBackupSettings()">Сохранить</button>
+            </div>
+        </div>
+        ${backups.length > 0 ? `
+        <div class="card fade-in" style="margin-top:16px">
+            <div class="card-header">
+                <h3 class="card-title">Существующие бекапы (${backups.length})</h3>
+            </div>
+            <div class="table-container" style="max-height:300px;overflow-y:auto">
+                <table>
+                    <thead><tr><th>Файл</th><th>Размер</th><th>Дата</th><th></th></tr></thead>
+                    <tbody>
+                        ${backups.map(b => {
+                            const size = b.size > 1048576 ? (b.size / 1048576).toFixed(1) + ' MB' : (b.size / 1024).toFixed(0) + ' KB';
+                            const date = new Date(b.created).toLocaleString();
+                            return '<tr><td style="font-size:12px">' + b.filename + '</td><td>' + size + '</td><td>' + date + '</td><td><a href="/api/backups/download/' + b.filename + '" class="btn btn-ghost btn-sm" style="font-size:11px">Скачать</a> <button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red)" onclick="Pages.deleteBackupFromSettings(\'' + b.filename + '\')">Удалить</button></td></tr>';
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>` : ''}`;
+    } catch(e) { Toast.error(e.message); }
+};
+
+Pages.saveBackupSettings = async function() {
+    try {
+        const data = {
+            backup: {
+                path: document.getElementById('bk-path').value,
+                schedule: {
+                    enabled: document.getElementById('bk-sched-on').checked,
+                    interval_hours: parseInt(document.getElementById('bk-sched-hours').value),
+                    max_backups: parseInt(document.getElementById('bk-sched-max').value),
+                },
+                sftp: {
+                    enabled: document.getElementById('bk-sftp-on').checked,
+                    host: document.getElementById('bk-sftp-host')?.value || '',
+                    port: parseInt(document.getElementById('bk-sftp-port')?.value || 22),
+                    username: document.getElementById('bk-sftp-user')?.value || '',
+                    key_path: document.getElementById('bk-sftp-key')?.value || '',
+                    remote_path: document.getElementById('bk-sftp-remote')?.value || '/backups',
+                },
+            }
+        };
+        const pass = document.getElementById('bk-sftp-pass')?.value;
+        if (pass) data.backup.sftp.password = pass;
+        else data.backup.sftp.password = '***';
+        await API.put('/api/config', data);
+        Toast.success('Настройки бекапов сохранены');
+    } catch(e) { Toast.error(e.message); }
+};
+
+Pages.deleteBackupFromSettings = async function(filename) {
+    if (!confirm('Удалить этот бекап?')) return;
+    try {
+        await API.del('/api/backups/' + filename);
+        Toast.success('Бекап удалён');
+        Pages.settingsBackup();
+    } catch(e) { Toast.error(e.message); }
 };
 
 Pages['system-terminal'] = async function() {

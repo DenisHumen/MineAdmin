@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -10,6 +11,16 @@ from app.config import load_config, save_config
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 logger = logging.getLogger("mineadmin.routes.config")
+
+_version_file = Path(__file__).resolve().parent.parent.parent / "VERSION"
+
+
+@router.get("/version")
+async def get_version():
+    try:
+        return {"version": _version_file.read_text().strip()}
+    except Exception:
+        return {"version": "unknown"}
 
 
 @router.get("")
@@ -29,9 +40,30 @@ async def update_config(request: Request, user: dict = Depends(get_current_user)
     data = await request.json()
     cfg = load_config()
 
-    for key in ["db_type", "default_java_memory", "max_java_memory"]:
+    for key in ["db_type", "default_java_memory", "max_java_memory", "servers_dir"]:
         if key in data:
             cfg[key] = data[key]
+
+    if "backup" in data:
+        if "backup" not in cfg:
+            cfg["backup"] = {}
+        for k in ["path"]:
+            if k in data["backup"]:
+                cfg["backup"][k] = data["backup"][k]
+        if "sftp" in data["backup"]:
+            if "sftp" not in cfg["backup"]:
+                cfg["backup"]["sftp"] = {}
+            for k in ["enabled", "host", "port", "username", "key_path", "remote_path"]:
+                if k in data["backup"]["sftp"]:
+                    cfg["backup"]["sftp"][k] = data["backup"]["sftp"][k]
+            if "password" in data["backup"]["sftp"] and data["backup"]["sftp"]["password"] != "***":
+                cfg["backup"]["sftp"]["password"] = data["backup"]["sftp"]["password"]
+        if "schedule" in data["backup"]:
+            if "schedule" not in cfg["backup"]:
+                cfg["backup"]["schedule"] = {}
+            for k in ["enabled", "interval_hours", "max_backups"]:
+                if k in data["backup"]["schedule"]:
+                    cfg["backup"]["schedule"][k] = data["backup"]["schedule"][k]
 
     if "mysql" in data:
         for k in ["host", "port", "user", "password", "database"]:
