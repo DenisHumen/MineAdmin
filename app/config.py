@@ -1,9 +1,14 @@
 import os
+import sys
 import json
 import secrets
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+if getattr(sys, "frozen", False):
+    # PyInstaller bundle: store data next to the executable, not in temp dir
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 SERVERS_DIR = DATA_DIR / "servers"
 DB_DIR = DATA_DIR / "db"

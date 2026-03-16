@@ -7,8 +7,14 @@ import platform
 import importlib
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent
-VERSION_FILE = BASE_DIR / "VERSION"
+if getattr(sys, "frozen", False):
+    # PyInstaller bundle: use directory of the executable
+    BASE_DIR = Path(sys.executable).resolve().parent
+    # VERSION is bundled in sys._MEIPASS, data goes next to executable
+    VERSION_FILE = Path(sys._MEIPASS) / "VERSION"
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+    VERSION_FILE = BASE_DIR / "VERSION"
 
 
 def get_version() -> str:
