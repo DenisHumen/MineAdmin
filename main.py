@@ -41,6 +41,9 @@ def check_python_version():
 
 
 def check_dependencies() -> list[str]:
+    # When running as a PyInstaller bundle all packages are already included
+    if getattr(sys, "frozen", False):
+        return []
     required = {
         "fastapi": "fastapi",
         "uvicorn": "uvicorn",
